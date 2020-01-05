@@ -100,6 +100,24 @@ class Book(db.Model):
     def __repr__(self):
         return '<Book {}>'.format(self.name)
 
+    def to_dict(self):
+        data = {
+            'id': self.id,
+            'name': self.name,
+            'isbn': self.isbn,
+            'author_id': self.author_id,
+            '_links': {
+                'self': url_for('api.get_book', id=self.id),
+                'author': url_for('api.get_author', id=self.author_id),
+            }
+        }
+        return data
+
+    def from_dict(self, data):
+        for field in ['name', 'isbn', 'author_id']:
+            if field in data:
+                setattr(self, field, data[field])
+
 
 class BookIssueHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)

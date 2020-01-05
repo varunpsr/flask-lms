@@ -27,3 +27,27 @@ def create_author():
     response.status_code = 201
     response.headers['Location'] = url_for('api.get_author', id=author.id)
     return response
+
+@bp.route('/book/<int:id>', methods=['GET'])
+@token_auth.login_required
+def get_book(id):
+    return jsonify(Book.query.get_or_404(id).to_dict())
+
+
+@bp.route('/book', methods=['POST'])
+def create_book():
+    data = request.get_json() or {}
+    if 'name' not in data or 'isbn' not in data or 'author_id' not in data:
+        return bad_request('must include name')
+    if Book.query.filter_by(name=data['name']).first():
+        return bad_request('please use a different name')
+    if Book.query.filter_by(isbn=data['isbn']).first():
+        return bad_request('Two books can not have the same ISBN.')
+    book = Book()
+    book.from_dict(data)
+    db.session.add(book)
+    db.session.commit()
+    response = jsonify(book.to_dict())
+    response.status_code = 201
+    response.headers['Location'] = url_for('api.get_book', id=book.id)
+    return response
