@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 import json
 import os
 from flask import current_app, url_for
-from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 
@@ -13,17 +12,19 @@ class User(db.Model):
     first_name = db.Column(db.String(200), nullable=True)
     last_name = db.Column(db.String(200), nullable=True)
     email = db.Column(db.String(250), index=True, unique=True)
-    password = db.Column(db.String(64))
+    password = db.Column(db.String(128))
+    token = db.Column(db.String(32), index=True, unique=True)
+    token_expiration = db.Column(db.DateTime)
     books = db.relationship('BookIssueHistory', backref='books_issued', lazy='dynamic')
 
     def __repr__(self):
         return '<User, {}>'.format(self.username)
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password = generate_password_hash(password)
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        return check_password_hash(self.password, password)
 
     def to_dict(self, include_email=False):
         data = {
@@ -51,10 +52,18 @@ class User(db.Model):
         self.token = base64.b64encode(os.urandom(24)).decode('utf-8')
         self.token_expiration = now + timedelta(seconds=expires_in)
         db.session.add(self)
+        db.session.commit()
         return self.token
 
     def revoke_token(self):
         self.token_expiration = datetime.utcnow() - timedelta(seconds=1)
+
+    @staticmethod
+    def check_token(token):
+        user = User.query.filter_by(token=token).first()
+        if user is None or user.token_expiration < datetime.utcnow():
+            return None
+        return user
 
 
 
@@ -65,6 +74,21 @@ class Author(db.Model):
 
     def __repr__(self):
         return '<Author {}>'.format(self.name)
+
+    def to_dict(self):
+        data = {
+            'id': self.id,
+            'name': self.name,
+            '_links': {
+                'self': url_for('api.get_author', id=self.id),
+            }
+        }
+        return data
+
+    def from_dict(self, data):
+        for field in ['name']:
+            if field in data:
+                setattr(self, field, data[field])
 
 
 class Book(db.Model):

@@ -14,6 +14,9 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
 
+    with app.app_context():
+        db.create_all()
+
     from app.main import bp as api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
 
