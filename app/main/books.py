@@ -1,4 +1,5 @@
 from flask import jsonify, request, url_for, g, abort
+from datetime import date, datetime
 from app import db
 from app.models import Book, BookIssueHistory, User, Author
 from app.main.auth import token_auth
@@ -50,4 +51,26 @@ def create_book():
     response = jsonify(book.to_dict())
     response.status_code = 201
     response.headers['Location'] = url_for('api.get_book', id=book.id)
+    return response
+
+@bp.route('/borrow/<int:id>', methods=['GET'])
+@token_auth.login_required
+def get_borrow_details(id):
+    return jsonify(BookIssueHistory.query.get_or_404(id).to_dict())
+
+@bp.route('/book/<int:book_id>/borrow/<int:user_id>', methods=['GET'])
+@token_auth.login_required
+def borrow_book(book_id, user_id):
+    if g.current_user.id != user_id:
+        abort(403)
+    user = User.query.get_or_404(g.current_user.id)
+    book = Book.query.get_or_404(book_id)
+    issued_book = BookIssueHistory()
+    issued_book.book_id = book.id
+    issued_book.issuer_id = user.id
+    issued_book.issue_date = datetime.today().date()
+    db.session.add(issued_book)
+    db.session.commit()
+    response = jsonify(issued_book.to_dict())
+    response.status_code = 201
     return response

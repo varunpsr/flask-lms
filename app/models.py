@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import json
 import os
 from flask import current_app, url_for
@@ -30,6 +30,7 @@ class User(db.Model):
         data = {
             'id': self.id,
             'username': self.username,
+            'borrow_cost': self.borrow_costs(),
             '_links': {
                 'self': url_for('api.get_user', id=self.id),
             }
@@ -57,6 +58,13 @@ class User(db.Model):
 
     def revoke_token(self):
         self.token_expiration = datetime.utcnow() - timedelta(seconds=1)
+
+    def borrow_costs(self):
+        sum = 0
+        for book in self.books:
+            if book.return_date is None:
+                sum += book.borrow_cost()
+        return sum
 
     @staticmethod
     def check_token(token):
@@ -125,3 +133,34 @@ class BookIssueHistory(db.Model):
     return_date = db.Column(db.Date, index=True, nullable=True)
     book_id = db.Column(db.Integer, db.ForeignKey('book.id'))
     issuer_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+    def __repr__(self):
+        return '<IssueRecord: {}>'.format(self.id)
+
+    def to_dict(self):
+        data = {
+            'id': self.id,
+            'issue_date': self.issue_date,
+            'return_date': self.return_date,
+            'book_id': self.book_id,
+            'issuer_id': self.issuer_id,
+            'borrow_cost': self.borrow_cost(),
+            '_links': {
+                'self': url_for('api.get_book', id=self.id),
+            }
+        }
+        return data
+
+    def from_dict(self, data):
+        for field in ['issue_date', 'return_date', 'book_id', 'issuer_id']:
+            if field in data:
+                setattr(self, field, data[field])
+
+    def borrow_cost(self):
+        if self.return_date is None:
+            return_date = datetime.today().date()
+        else:
+            return_date = self.return_date
+        number_of_days = (self.issue_date - return_date).days
+        cost_per_day = 1
+        return number_of_days * cost_per_day
